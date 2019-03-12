@@ -27,7 +27,8 @@ SQLAlchemy = "*"
 flask = "*"
 flask-restplus = ">=0.12.1"
 tensorflow = ">1.11.0"
-
+click = "*"
+requests = "*"
 
 [dev-packages]
 
