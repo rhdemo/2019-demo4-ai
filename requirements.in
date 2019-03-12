@@ -1,0 +1,28 @@
+### scipy-notebook
+
+ipywidgets
+numpy
+pandas
+numexpr
+matplotlib
+scipy
+scikit-learn
+scikit-image
+sympy
+patsy
+statsmodels
+natsort
+cloudpickle
+dill
+numba
+sqlalchemy
+s3fs
+h5py
+vincent
+xlrd
+flask
+flask-restplus
+
+### tensorflow-notebook
+
+tensorflow

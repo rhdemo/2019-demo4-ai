@@ -1,0 +1,35 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+ipywidgets = ">=7.4.0"
+numpy = "*"
+pandas = ">=0.24.0"
+numexpr = "*"
+matplotlib = "*"
+scipy = ">=1.2.0"
+scikit-learn = "*"
+scikit-image = "*"
+sympy = "*"
+patsy = "*"
+statsmodels = "*"
+natsort = "*"
+cloudpickle = "*"
+dill = "*"
+numba = "*"
+"h5py" = "*"
+vincent = "*"
+xlrd = "*"
+SQLAlchemy = "*"
+"s3fs" = "*"
+flask = "*"
+flask-restplus = ">=0.12.1"
+tensorflow = ">1.11.0"
+
+
+[dev-packages]
+
+[requires]
+python_version = "3.6"
