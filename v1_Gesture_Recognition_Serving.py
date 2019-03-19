@@ -30,8 +30,6 @@ _MODEL_DIR = Path(os.getenv("MODEL_DIR", _HERE / "models/hdf5"))
 """Path to model directory."""
 _MODEL: keras.Model = None
 """Keras model."""
-_GRAPH: tf.Graph = None
-"""Default TensorFlow graph."""
 
 
 app = Flask(__name__)
@@ -91,11 +89,13 @@ class Model(Resource):
 
         Expected input: tensor of shape (13,)
         """
+        global _SESSION
+
         message = request.get_json(force=True)
         input_t: np.ndarray = np.array(message['instances'], dtype=np.float64)
 
-        with _GRAPH.as_default():
-            predictions: np.ndarray = _MODEL.predict_on_batch(input_t)
+        tf.keras.backend.set_session(_SESSION)
+        predictions: np.ndarray = _MODEL.predict_on_batch(input_t)
 
         response = {
             'predictions': predictions.tolist()
@@ -108,7 +108,7 @@ class Model(Resource):
 def _load_keras_model():
     """Load Keras model."""
     global _MODEL
-    global _GRAPH
+    global _SESSION
 
     app.logger.info("Loading Keras model.")
 
@@ -138,7 +138,7 @@ def _load_keras_model():
 
             abort(HTTPStatus.BAD_REQUEST, "Failed. Model not loaded.")
 
-        _GRAPH = tf.get_default_graph()
+        _SESSION = tf.keras.backend.get_session()
 
 
 if __name__ == '__main__':
@@ -149,4 +149,4 @@ if __name__ == '__main__':
     api.add_namespace(probe_ns)
     api.add_namespace(model_ns)
 
-    app.run(host='0.0.0.0', debug=True)
+    app.run(host='0.0.0.0', debug=False)
