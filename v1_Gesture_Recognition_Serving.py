@@ -91,11 +91,13 @@ class Model(Resource):
         """
         global _SESSION
 
+        model = _load_keras_model()
+
         message = request.get_json(force=True)
         input_t: np.ndarray = np.array(message['instances'], dtype=np.float64)
 
         tf.keras.backend.set_session(_SESSION)
-        predictions: np.ndarray = _MODEL.predict_on_batch(input_t)
+        predictions: np.ndarray = model.predict_on_batch(input_t)
 
         response = {
             'predictions': predictions.tolist()
@@ -104,11 +106,13 @@ class Model(Resource):
         return response, HTTPStatus.OK
 
 
-@app.before_first_request
 def _load_keras_model():
     """Load Keras model."""
     global _MODEL
     global _SESSION
+
+    if _MODEL is not None:
+        return _MODEL
 
     app.logger.info("Loading Keras model.")
 
@@ -139,6 +143,8 @@ def _load_keras_model():
             abort(HTTPStatus.BAD_REQUEST, "Failed. Model not loaded.")
 
         _SESSION = tf.keras.backend.get_session()
+
+    return _MODEL
 
 
 if __name__ == '__main__':
