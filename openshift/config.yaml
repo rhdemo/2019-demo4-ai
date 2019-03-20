@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: Template
+metadata:
+  name: s3-config
+  annotations:
+    description: "Template to configure S3 credentials"
+    openshift.io/display-name: "S3 Config"
+    iconClass: "icon-python"
+    tags: "opendatahub"
+    openshift.io/provider-display-name: "Open Data Hub"
+  labels:
+    template: s3-config
+objects:
+- kind: Secret
+  apiVersion: v1
+  metadata:
+    name: s3-config
+    labels:
+      app: odh
+  stringData:
+    s3_endpoint_url: ${S3_ENDPOINT_URL}
+    access_key: ${AWS_SECRET_ACCESS_KEY}
+    key_id: ${AWS_ACCESS_KEY_ID}
+parameters:
+- name: S3_ENDPOINT_URL
+  description: URL of S3 endpoint to be used for data storage
+  required: false
+- name: AWS_SECRET_ACCESS_KEY
+  description: S3 instance secret access key
+  required: true
+- name: AWS_ACCESS_KEY_ID
+  description: S3 instance access key id
+  required: true

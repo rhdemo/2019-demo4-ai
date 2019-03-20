@@ -1,0 +1,7 @@
+#!/usr/bin/bash
+
+
+/usr/libexec/s2i/assemble
+
+
+ls -la $HOME

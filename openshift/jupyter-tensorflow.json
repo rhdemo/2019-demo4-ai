@@ -1,0 +1,317 @@
+{
+    "kind": "Template",
+    "apiVersion": "v1",
+    "metadata": {
+        "name": "jupyter-notebook-workspace-tensorflow",
+        "annotations": {
+            "openshift.io/display-name": "Jupyter Notebook Workspace (Tensorflow)",
+            "description": "Template for deploying Tensorflow enable Jupyter Notebook images with persistent storage.",
+            "iconClass": "icon-python",
+            "tags": "opendatahub,jupyter",
+            "openshift.io/provider-display-name": "Open Data Hub"
+        }
+    },
+    "parameters": [
+        {
+            "name": "APPLICATION_NAME",
+            "value": "jupyter-tensorflow",
+            "required": true
+        },
+        {
+            "name": "NOTEBOOK_MEMORY",
+            "value": "2Gi",
+            "required": true
+        },
+        {
+            "name": "NOTEBOOK_CPU",
+            "value": "2",
+            "required": true
+        },
+        {
+            "name": "VOLUME_SIZE",
+            "value": "2Gi",
+            "required": true
+        },
+        {
+            "name": "JUPYTER_PRELOAD_REPOS",
+            "value": "https://github.com/vpavlin/knative-tf-serving-notebook-demo",
+            "required": false
+        }
+    ],
+    "objects": [
+        {
+            "kind": "DeploymentConfig",
+            "apiVersion": "v1",
+            "metadata": {
+                "name": "${APPLICATION_NAME}",
+                "labels": {
+                    "app": "${APPLICATION_NAME}"
+                }
+            },
+            "spec": {
+                "strategy": {
+                    "type": "Recreate"
+                },
+                "triggers": [
+                    {
+                        "type": "ConfigChange"
+                    }
+                ],
+                "replicas": 1,
+                "selector": {
+                    "app": "${APPLICATION_NAME}",
+                    "deploymentconfig": "${APPLICATION_NAME}"
+                },
+                "template": {
+                    "metadata": {
+                        "labels": {
+                            "app": "${APPLICATION_NAME}",
+                            "deploymentconfig": "${APPLICATION_NAME}"
+                        }
+                    },
+                    "spec": {
+                        "serviceAccountName": "${APPLICATION_NAME}",
+                        "volumes": [
+                            {
+                                "name": "data",
+                                "persistentVolumeClaim": {
+                                    "claimName": "${APPLICATION_NAME}-data"
+                                }
+                            },
+                            {
+                                "name": "proxy-tls",
+                                "secret": {
+                                    "secretName": "${APPLICATION_NAME}-tls"
+                                }
+                            },
+                            {
+                                "name": "jupyter-config",
+                                "configMap": {
+                                    "name": "${APPLICATION_NAME}"
+                                }
+                            }
+                        ],
+                        "containers": [
+                            {
+                                "name": "notebook",
+                                "image": "quay.io/vpavlin/jupyter-notebook-tensorflow",
+                                "ports": [
+                                    {
+                                        "containerPort": 8080,
+                                        "protocol": "TCP"
+                                    },
+                                    {
+                                        "containerPort": 8081,
+                                        "protocol": "TCP"
+                                    }
+                                ],
+                                "resources": {
+                                    "limits": {
+                                        "memory": "${NOTEBOOK_MEMORY}",
+                                        "cpu": "${NOTEBOOK_CPU}"
+                                    }
+                                },
+                                "volumeMounts": [
+                                    {
+                                        "name": "data",
+                                        "mountPath": "/opt/app-root/src"
+                                    },
+                                    {
+                                        "name": "jupyter-config",
+                                        "mountPath": "/opt/app-root/src/.jupyter/jupyter_config.py",
+                                        "subPath": "jupyter_config.py"
+                                    }
+                                ],
+                                "env": [
+                                    {
+                                        "name": "S3_ENDPOINT_URL",
+                                        "valueFrom": {
+                                          "secretKeyRef": {
+                                            "name": "s3-config",
+                                            "key": "s3_endpoint_url"
+                                          }
+                                        }
+                                    },
+                                    {
+                                        "name": "AWS_SECRET_ACCESS_KEY",
+                                        "valueFrom": {
+                                          "secretKeyRef": {
+                                            "name": "s3-config",
+                                            "key": "access_key"
+                                          }
+                                        }
+                                    },
+                                    {
+                                        "name": "AWS_ACCESS_KEY_ID",
+                                        "valueFrom": {
+                                          "secretKeyRef": {
+                                            "name": "s3-config",
+                                            "key": "key_id"
+                                          }
+                                        }
+                                    },
+                                    {
+                                        "name": "JUPYTER_PRELOAD_REPOS",
+                                        "value": "${JUPYTER_PRELOAD_REPOS}"
+                                    }
+                                ]
+                            },
+                            {
+                                "name": "oauth-proxy",
+                                "image": "openshift/oauth-proxy:latest",
+                                "ports": [
+                                    {
+                                        "containerPort": 8443,
+                                        "protocol": "TCP",
+                                        "name": "public"
+                                    }
+                                ],
+                                "resources": {
+                                    "limits": {
+                                        "memory": "512Mi"
+                                    }
+                                },
+                                "env": [
+                                ],
+                                "volumeMounts": [
+                                    {
+                                        "mountPath": "/etc/tls/private",
+                                        "name": "proxy-tls"
+                                    }
+                                ],
+                                "args": [
+                                    "--https-address=:8443",
+                                    "--provider=openshift",
+                                    "--openshift-service-account=${APPLICATION_NAME}",
+                                    "--upstream=http://localhost:8080",
+                                    "--tls-cert=/etc/tls/private/tls.crt",
+                                    "--tls-key=/etc/tls/private/tls.key",
+                                    "--cookie-secret=24334JOI34"
+                                ]
+                            }
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "kind": "PersistentVolumeClaim",
+            "apiVersion": "v1",
+            "metadata": {
+                "name": "${APPLICATION_NAME}-data",
+                "annotations": {
+                },
+                "labels": {
+                    "app": "${APPLICATION_NAME}"
+                }
+            },
+            "spec": {
+                "accessModes": [
+                    "ReadWriteOnce"
+                ],
+                "resources": {
+                    "requests": {
+                        "storage": "${VOLUME_SIZE}"
+                    }
+                }
+            }
+        },
+        {
+            "kind": "Service",
+            "apiVersion": "v1",
+            "metadata": {
+                "name": "${APPLICATION_NAME}",
+                "labels": {
+                    "app": "${APPLICATION_NAME}"
+                },
+                "annotations": {
+                    "service.alpha.openshift.io/serving-cert-secret-name": "${APPLICATION_NAME}-tls"
+                }
+            },
+            "spec": {
+                "ports": [
+                    {
+                        "name": "8443-tcp",
+                        "protocol": "TCP",
+                        "port": 443,
+                        "targetPort": 8443
+                    }
+                ],
+                "selector": {
+                    "app": "${APPLICATION_NAME}",
+                    "deploymentconfig": "${APPLICATION_NAME}"
+                }
+            }
+        },
+        {
+            "kind": "Route",
+            "apiVersion": "v1",
+            "metadata": {
+                "name": "${APPLICATION_NAME}",
+                "labels": {
+                    "app": "${APPLICATION_NAME}"
+                }
+            },
+            "spec": {
+                "host": "",
+                "to": {
+                    "kind": "Service",
+                    "name": "${APPLICATION_NAME}",
+                    "weight": 100
+                },
+                "port": {
+                    "targetPort": "8443-tcp"
+                },
+                "tls": {
+                    "termination": "Reencrypt",
+                    "insecureEdgeTerminationPolicy": "Redirect"
+                }
+            }
+        },
+        {
+            "apiVersion": "v1",
+            "kind": "ServiceAccount",
+            "metadata": {
+                "name": "${APPLICATION_NAME}",
+                "annotations": {
+                    "serviceaccounts.openshift.io/oauth-redirectreference.primary": "{\"kind\":\"OAuthRedirectReference\",\"apiVersion\":\"v1\",\"reference\":{\"kind\":\"Route\",\"name\":\"${APPLICATION_NAME}\"}}"
+                },
+                "labels": {
+                    "app": "${APPLICATION_NAME}"
+                }
+            }
+        },
+        {
+		    "kind": "RoleBinding",
+		    "apiVersion": "v1",
+		    "metadata": {
+			"name": "${APPLICATION_NAME}-edit",
+                        "labels": {
+                            "app": "${APPLICATION_NAME}"
+                        }
+		    },
+		    "subjects": [
+			{
+			    "kind": "ServiceAccount",
+			    "name": "${APPLICATION_NAME}"
+			}
+		    ],
+		    "roleRef": {
+			    "name": "edit"
+		    }
+		},
+        {
+            "apiVersion": "v1",
+            "kind": "ConfigMap",
+            "metadata": {
+                "name": "${APPLICATION_NAME}",
+                "labels": {
+                    "app": "${APPLICATION_NAME}"
+                }
+            },
+            "data": {
+                "jupyter_config.py": "c.NotebookApp.token = ''"
+            }
+        }
+    ]
+}
