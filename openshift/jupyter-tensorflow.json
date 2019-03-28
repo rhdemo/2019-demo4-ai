@@ -34,7 +34,7 @@
         },
         {
             "name": "JUPYTER_PRELOAD_REPOS",
-            "value": "https://github.com/vpavlin/knative-tf-serving-notebook-demo",
+            "value": "https://github.com/rhdemo/2019-demo4-ai",
             "required": false
         }
     ],
@@ -55,7 +55,20 @@
                 "triggers": [
                     {
                         "type": "ConfigChange"
-                    }
+                    },
+                    {
+                        "type": "ImageChange",
+                        "imageChangeParams": {
+                          "automatic": true,
+                          "containerNames": [
+                            "notebook"
+                          ],
+                          "from": {
+                            "kind": "ImageStreamTag",
+                            "name": "jupyter-notebook-tensorflow-img:latest"
+                          }
+                        }
+                      }
                 ],
                 "replicas": 1,
                 "selector": {
@@ -94,7 +107,7 @@
                         "containers": [
                             {
                                 "name": "notebook",
-                                "image": "quay.io/vpavlin/jupyter-notebook-tensorflow",
+                                "image": "jupyter-notebook-tensorflow-img",
                                 "ports": [
                                     {
                                         "containerPort": 8080,
@@ -311,6 +324,60 @@
             },
             "data": {
                 "jupyter_config.py": "c.NotebookApp.token = ''"
+            }
+        },
+        {
+            "kind": "BuildConfig",
+            "apiVersion": "v1",
+            "metadata": {
+                "name": "jupyter-notebook-tensorflow-img",
+                "creationTimestamp": null,
+                "labels": {
+                    "app": "${APPLICATION_NAME}"
+                }
+            },
+            "spec": {
+                "runPolicy": "Serial",
+                "source": {
+                    "type": "Git",
+                    "git": {
+                        "uri": "https://github.com/vpavlin/2019-demo4-ai",
+                        "ref": "feature/add-serving-infra"
+                    }
+                },
+                "strategy": {
+                    "type": "source",
+                    "sourceStrategy": {
+                        "from": {
+                            "kind": "DockerImage",
+                            "name": "quay.io/vpavlin/jupyter-notebook-tensorflow"
+                        }
+                    }
+                },
+                "output": {
+                    "to": {
+                        "kind": "ImageStreamTag",
+                        "name": "jupyter-notebook-tensorflow-img:latest"
+                    }
+                },
+                "triggers": [
+                    {
+                        "type": "ConfigChange"
+                    }
+                ],
+                "resources": {},
+                "postCommit": {},
+                "nodeSelector": null
+            },
+            "status": {
+                "lastVersion": 0
+            }
+        },
+        {
+            "kind": "ImageStream",
+            "apiVersion": "v1",
+            "metadata": {
+                "name": "jupyter-notebook-tensorflow-img"
             }
         }
     ]

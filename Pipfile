@@ -29,6 +29,8 @@ flask-restplus = ">=0.12.1"
 tensorflow = ">1.11.0"
 click = "*"
 requests = "*"
+notebook = "==5.4.1"
+tornado = "<6.0.0"
 
 [dev-packages]
 
