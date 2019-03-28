@@ -1,0 +1,18 @@
+#!/usr/bin/bash
+
+set -eo pipefail
+
+if [ -n "${JUPYTER_PRELOAD_REPOS}" ]; then
+    if [ -e "${JUPYTER_PRELOAD_REPOS}" ]; then
+        cd $JUPYTER_PRELOAD_REPOS
+        git pull
+    else
+        git clone $JUPYTER_PRELOAD_REPOS
+    fi
+fi
+
+if [ -e /opt/app-root/builder/run ]; then
+    exec /opt/app-root/builder/run
+else
+    exec /usr/libexec/s2i/run
+fi

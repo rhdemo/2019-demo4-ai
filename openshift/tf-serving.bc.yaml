@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: List
+metadata:
+  name: tf-serving
+items:
+- apiVersion: build.openshift.io/v1
+  kind: BuildConfig
+  metadata:
+    labels:
+      build: tf-serving
+    name: tf-serving
+  spec:
+    output:
+      to:
+        kind: ImageStreamTag
+        name: tf-serving:latest
+    source:
+      git:
+        uri: https://github.com/vpavlin/2019-demo4-ai
+        ref: feature/add-serving-infra
+      type: Git
+    strategy:
+      sourceStrategy:
+        from:
+          kind: ImageStreamTag
+          name: "python:3.6"
+          namespace: openshift
+      type: Source
+    triggers:
+    - type: ConfigChange
+  status:
+- apiVersion: image.openshift.io/v1
+  kind: ImageStream
+  metadata:
+    labels:
+      build: tf-serving
+    name: tf-serving
+  spec:
+    lookupPolicy:
+      local: true
+  status:
