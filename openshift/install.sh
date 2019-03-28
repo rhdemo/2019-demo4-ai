@@ -1,6 +1,6 @@
 #!/usr/bin/bash
 
-ORG="vpavlin"
+ORG="rhdemo"
 REPO="2019-demo4-ai"
 
 
