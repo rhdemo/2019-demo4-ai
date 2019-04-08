@@ -31,6 +31,7 @@ click = "*"
 requests = "*"
 notebook = "==5.4.1"
 tornado = "<6.0.0"
+joblib = "*"
 
 [dev-packages]
 
