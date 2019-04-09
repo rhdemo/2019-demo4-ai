@@ -1,2 +1,2 @@
-APP_FILE=./v1_Gesture_Recognition_Serving.py
+APP_FILE=./v4_Gesture_Recognition_Serving.py
 ENABLE_PIPENV=1
