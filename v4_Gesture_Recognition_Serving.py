@@ -22,6 +22,8 @@ import tensorflow as tf
 
 from tensorflow import keras
 
+from demo_lib import demo
+
 
 _HERE = Path(__file__).parent
 _EXAMPLE_DATA_PATH = Path(_HERE, 'data/dance/floss/example.json')
@@ -83,7 +85,7 @@ class Readiness(Resource):
 class Model(Resource):
     """Model api resource."""
 
-    @model_ns.expect(model_input, validate=True)
+    @model_ns.expect(model_input, validate=False)
     def post(self):
         """Return predictions from the trained model.
 
@@ -94,7 +96,11 @@ class Model(Resource):
         model = _load_keras_model()
 
         message = request.get_json(force=True)
-        input_t: np.ndarray = np.array(message['instances'], dtype=np.float64)
+
+        data = [demo.process_motion_rotation(message, 0)]
+        instances = demo.create_dataframe(data, False)
+
+        input_t: np.ndarray = np.array(instances, dtype=np.float64)
 
         tf.keras.backend.set_session(_SESSION)
         predictions: np.ndarray = model.predict_on_batch(input_t)
