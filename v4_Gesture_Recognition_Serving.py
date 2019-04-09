@@ -96,8 +96,15 @@ model_output = model_ns.model(u'ModelOutput', {
         description="Mapping candidate -> score for each predicted candidate."
     ),
 })
+prediction_input = model_ns.model(u'PredictionInput', {
+    'instances': fields.List(
+        fields.Nested(model_input),
+        required=True,
+        description="List of inputs to the model for prediction."
+    )
+})
 
-payload = model_ns.model('Payload', {
+payload = model_ns.model('uPayload', {
     'payload': fields.Nested(
         model_output,
         as_list=True,
@@ -142,23 +149,23 @@ class Model(Resource):
 
     @model_ns.response(200, 'Success', model=payload)
     @model_ns.response(400, 'Validation Error')
-    @model_ns.expect(model_input, validate=True)
+    @model_ns.expect(prediction_input, validate=True)
     @model_ns.marshal_list_with(payload)
     def post(self):
-        """Return predictions from the trained model.
-
-        Expected input: tensor of shape (13,)
-        """
+        """Return predictions from the trained model."""
         global _SESSION
 
         model, encoder = _load_keras_model()
 
-        message = request.get_json(force=True)
+        instances = request.get_json(force=True)['instances']
 
-        data = [demo.process_motion_rotation(message, 0)]
-        instances = demo.create_dataframe(data, False)
+        data = [
+            demo.process_motion_rotation(sample, i)
+            for i, sample in enumerate(instances)
+        ]
+        df = demo.create_dataframe(data, False)
 
-        input_t: np.ndarray = np.array(instances, dtype=np.float64)
+        input_t: np.ndarray = np.array(df, dtype=np.float64)
 
         tf.keras.backend.set_session(_SESSION)
 
