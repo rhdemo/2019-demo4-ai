@@ -163,7 +163,7 @@ class Model(Resource):
             demo.process_motion_rotation(sample, i)
             for i, sample in enumerate(instances)
         ]
-        df = demo.create_dataframe(data, False)
+        df = demo.create_dataframe(demo.clean_data(data), False)
 
         input_t: np.ndarray = np.array(df, dtype=np.float64)
 
