@@ -163,7 +163,7 @@ class Model(Resource):
             demo.process_motion_rotation(sample, i)
             for i, sample in enumerate(instances)
         ]
-        df = demo.create_dataframe(data, False)
+        df = demo.create_dataframe(demo.clean_data(data), False)
 
         input_t: np.ndarray = np.array(df, dtype=np.float64)
 
@@ -171,6 +171,9 @@ class Model(Resource):
 
         scores: np.ndarray = model.predict(
             input_t, max_queue_size=20, use_multiprocessing=True, workers=4)
+        probas: np.ndarray = np.exp(scores)
+        probas /= np.sum(probas, axis=1)[:, np.newaxis]
+
         labels: np.ndarray = np.argmax(scores, axis=1)
 
         candidates: list = encoder.inverse_transform(labels).tolist()
@@ -182,9 +185,9 @@ class Model(Resource):
                     'candidate_score': float(sample[labels[i]]),
                     'predictions': dict(
                         zip(encoder.classes_, sample.tolist())),
-                } for i, sample in enumerate(scores)
+                } for i, sample in enumerate(probas)
             ],
-            'total': len(scores)
+            'total': len(candidates)
         }
 
         return response, HTTPStatus.OK
