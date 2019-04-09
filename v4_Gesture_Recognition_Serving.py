@@ -44,19 +44,43 @@ app = Flask(__name__)
 probe_ns = Namespace('probe', description="Health checks.")
 model_ns = Namespace('model', description="Model namespace.")
 
+
+example = json.loads(
+    Path(_EXAMPLE_DATA_PATH).read_text())
+
 model_input = model_ns.model(u'ModelInput', {
-    'instances': fields.List(
+    'gesture': fields.String(
+        require=False,
+        description="String. Label of the dance move.",
+        example=example['gesture'],
+    ),
+    'motion': fields.List(
         fields.List(fields.Float),
         required=True,
-        description="Model input instances. Tensor of shape (N, 13)",
-        example=json.loads(
-            Path(_EXAMPLE_DATA_PATH).read_text()),
+        description="Array of floats. Model input motion data.",
+        example=example['motion']
     ),
-    'signature': fields.String(
+    'orientation': fields.List(
+        fields.List(fields.Float),
         required=True,
-        default="serving_default",
-        description="Signature to be returned my model.",
-        example="serving_default")
+        description="Array of floats. Model input orientation data.",
+        example=example['orientation']
+    ),
+    "playerId": fields.String(
+        required=False,
+        description="String. Player ID.",
+        example=example['playerId']
+    ),
+    "type": fields.String(
+        required=False,
+        description="String. Type of data.",
+        example=example['type']
+    ),
+    "uuid": fields.String(
+        required=False,
+        description="String. UUID",
+        example=example['uuid']
+    )
 })
 model_output = model_ns.model(u'ModelOutput', {
     'candidate': fields.String(
@@ -118,7 +142,7 @@ class Model(Resource):
 
     @model_ns.response(200, 'Success', model=payload)
     @model_ns.response(400, 'Validation Error')
-    @model_ns.expect(model_input, validate=False)
+    @model_ns.expect(model_input, validate=True)
     @model_ns.marshal_list_with(payload)
     def post(self):
         """Return predictions from the trained model.
