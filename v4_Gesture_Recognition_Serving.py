@@ -253,4 +253,4 @@ if __name__ == '__main__':
     api.add_namespace(probe_ns)
     api.add_namespace(model_ns)
 
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
