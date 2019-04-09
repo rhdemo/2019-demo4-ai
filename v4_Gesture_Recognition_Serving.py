@@ -7,6 +7,7 @@ import os
 
 import numpy as np
 
+from joblib import load
 from pathlib import Path
 
 from flask import Flask
@@ -20,6 +21,7 @@ from http import HTTPStatus
 
 import tensorflow as tf
 
+from sklearn.preprocessing.label import LabelEncoder
 from tensorflow import keras
 
 from demo_lib import demo
@@ -28,10 +30,13 @@ from demo_lib import demo
 _HERE = Path(__file__).parent
 _EXAMPLE_DATA_PATH = Path(_HERE, 'data/dance/floss/example.json')
 
-_MODEL_DIR = Path(os.getenv("MODEL_DIR", _HERE / "models/v4/hdf5"))
+_MODEL_DIR = Path(os.getenv("MODEL_DIR", _HERE / "models/v4"))
 """Path to model directory."""
 _MODEL: keras.Model = None
 """Keras model."""
+
+_ENCODER: LabelEncoder = None
+"""Label encoder/decoder."""
 
 
 app = Flask(__name__)
@@ -39,19 +44,76 @@ app = Flask(__name__)
 probe_ns = Namespace('probe', description="Health checks.")
 model_ns = Namespace('model', description="Model namespace.")
 
-model_input = model_ns.model('Input', {
-    'instances': fields.List(
+
+example = json.loads(
+    Path(_EXAMPLE_DATA_PATH).read_text())
+
+model_input = model_ns.model(u'ModelInput', {
+    'gesture': fields.String(
+        require=False,
+        description="String. Label of the dance move.",
+        example=example['gesture'],
+    ),
+    'motion': fields.List(
         fields.List(fields.Float),
         required=True,
-        description="Model input instances. Tensor of shape (N, 13)",
-        example=json.loads(
-            Path(_EXAMPLE_DATA_PATH).read_text()),
+        description="Array of floats. Model input motion data.",
+        example=example['motion']
     ),
-    'signature': fields.String(
+    'orientation': fields.List(
+        fields.List(fields.Float),
         required=True,
-        default="serving_default",
-        description="Signature to be returned my model.",
-        example="serving_default")
+        description="Array of floats. Model input orientation data.",
+        example=example['orientation']
+    ),
+    "playerId": fields.String(
+        required=False,
+        description="String. Player ID.",
+        example=example['playerId']
+    ),
+    "type": fields.String(
+        required=False,
+        description="String. Type of data.",
+        example=example['type']
+    ),
+    "uuid": fields.String(
+        required=False,
+        description="String. UUID",
+        example=example['uuid']
+    )
+})
+model_output = model_ns.model(u'ModelOutput', {
+    'candidate': fields.String(
+        required=True,
+        description="Best matching candidate."
+    ),
+    'candidate_score': fields.Float(
+        required=True,
+        description="Best matching candidate's score."
+    ),
+    'predictions': fields.Raw(
+        required=True,
+        description="Mapping candidate -> score for each predicted candidate."
+    ),
+})
+prediction_input = model_ns.model(u'PredictionInput', {
+    'instances': fields.List(
+        fields.Nested(model_input),
+        required=True,
+        description="List of inputs to the model for prediction."
+    )
+})
+
+payload = model_ns.model('uPayload', {
+    'payload': fields.Nested(
+        model_output,
+        as_list=True,
+        required=True,
+        description="Array of model predictions for each input."
+    ),
+    'total': fields.Integer(
+        required=False,
+        description="Total number of predictions.")
 })
 
 model_ns.add_model('model_input', model_input)
@@ -85,28 +147,44 @@ class Readiness(Resource):
 class Model(Resource):
     """Model api resource."""
 
-    @model_ns.expect(model_input, validate=False)
+    @model_ns.response(200, 'Success', model=payload)
+    @model_ns.response(400, 'Validation Error')
+    @model_ns.expect(prediction_input, validate=True)
+    @model_ns.marshal_list_with(payload)
     def post(self):
-        """Return predictions from the trained model.
-
-        Expected input: tensor of shape (13,)
-        """
+        """Return predictions from the trained model."""
         global _SESSION
 
-        model = _load_keras_model()
+        model, encoder = _load_keras_model()
 
-        message = request.get_json(force=True)
+        instances = request.get_json(force=True)['instances']
 
-        data = [demo.process_motion_rotation(message, 0)]
-        instances = demo.create_dataframe(data, False)
+        data = [
+            demo.process_motion_rotation(sample, i)
+            for i, sample in enumerate(instances)
+        ]
+        df = demo.create_dataframe(data, False)
 
-        input_t: np.ndarray = np.array(instances, dtype=np.float64)
+        input_t: np.ndarray = np.array(df, dtype=np.float64)
 
         tf.keras.backend.set_session(_SESSION)
-        predictions: np.ndarray = model.predict_on_batch(input_t)
+
+        scores: np.ndarray = model.predict(
+            input_t, max_queue_size=20, use_multiprocessing=True, workers=4)
+        labels: np.ndarray = np.argmax(scores, axis=1)
+
+        candidates: list = encoder.inverse_transform(labels).tolist()
 
         response = {
-            'predictions': predictions.tolist()
+            'payload': [
+                {
+                    'candidate': candidates[i],
+                    'candidate_score': float(sample[labels[i]]),
+                    'predictions': dict(
+                        zip(encoder.classes_, sample.tolist())),
+                } for i, sample in enumerate(scores)
+            ],
+            'total': len(scores)
         }
 
         return response, HTTPStatus.OK
@@ -115,10 +193,11 @@ class Model(Resource):
 def _load_keras_model():
     """Load Keras model."""
     global _MODEL
+    global _ENCODER
     global _SESSION
 
-    if _MODEL is not None:
-        return _MODEL
+    if all([_MODEL, _ENCODER]):
+        return _MODEL, _ENCODER
 
     app.logger.info("Loading Keras model.")
 
@@ -141,6 +220,7 @@ def _load_keras_model():
             'log_softmax': tf.nn.log_softmax,
             'softmax_cross_entropy_with_logits_v2_helper': tf.nn.softmax_cross_entropy_with_logits_v2
         })
+        _ENCODER = load(_MODEL_DIR / 'encoder.joblib')
 
         if isinstance(_MODEL, keras.Model):
             app.logger.info(f"Model '{latest}' successfully loaded.")
@@ -151,9 +231,18 @@ def _load_keras_model():
 
             abort(HTTPStatus.BAD_REQUEST, "Failed. Model not loaded.")
 
+        if isinstance(_ENCODER, LabelEncoder):
+            app.logger.info(f"Encoder successfully loaded.")
+
+        else:
+            msg = f"Expected model of type: {LabelEncoder}, got {type(_ENCODER)}"
+            app.logger.error(msg)
+
+            abort(HTTPStatus.BAD_REQUEST, "Failed. Encoder not loaded.")
+
         _SESSION = tf.keras.backend.get_session()
 
-    return _MODEL
+    return _MODEL, _ENCODER
 
 
 if __name__ == '__main__':
