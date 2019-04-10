@@ -53,7 +53,7 @@ example = json.loads(
 
 model_input = model_ns.model(u'ModelInput', {
     'gesture': fields.String(
-        require=False,
+        require=True,
         description="String. Label of the dance move.",
         example=example['gesture'],
     ),
