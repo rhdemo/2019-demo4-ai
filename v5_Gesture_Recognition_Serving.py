@@ -33,7 +33,7 @@ from demo_lib.demo import featurize
 _HERE = Path(__file__).parent
 _EXAMPLE_DATA_PATH = Path(_HERE, 'data/dance/floss/example.json')
 
-_MODEL_DIR = Path(os.getenv("MODEL_DIR", _HERE / "models/v4"))
+_MODEL_DIR = Path(os.getenv("MODEL_DIR", _HERE / "models/v5"))
 """Path to model directory."""
 _MODEL: keras.Model = None
 """Keras model."""
