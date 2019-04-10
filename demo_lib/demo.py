@@ -2,13 +2,21 @@
 """A library to prepare data for predictions"""
 
 import json
+
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
-import matplotlib.pylab as plt
+
+import matplotlib as mpl
 import scipy.stats
 
+motion_cols = [
+    'acceleration_x', 'acceleration_y', 'acceleration_z',
+    'rotation_alpha', 'rotation_beta', 'rotation_gamma',
+]
+orientation_cols = ['alpha', 'beta', 'gamma']
 
-counter = 0
 
 def load_data(file):
     with open(file, "r") as fp:
@@ -16,173 +24,238 @@ def load_data(file):
 
     return data
 
-def process_crosses_data(data_crosses):
-    '''Returns list of size N_samples and each element = tuple(index, label, acc+rot vel dataframe, rot angle dataframe)
-    '''
 
-    global counter
-    
-    data_cross_list = []
-    gesture = 'draw-cross'
+def get_raw_data(fs, path, debug=False):
+    """Reads raw data from S3 - not parallelized."""
+    data = {}
 
-    for d in data_crosses: #loop over each sample
-        acc_data = pd.DataFrame([x['acceleration'] for elem in data_crosses[d] for x in elem['motion']])
-        acc_data.columns = ['acceleration_x', 'acceleration_y', 'acceleration_z']
+    gestures_paths = fs.ls(path)
 
-        rot_data = pd.DataFrame([x['rotationRate'] for elem in data_crosses[d] for x in elem['motion']])
-        rot_data.columns = ['rotation_alpha', 'rotation_beta', 'rotation_gamma']
+    for gesture in gestures_paths:
+        files_to_read = fs.ls(gesture)
 
-        timestamp_data = pd.DataFrame([x['timestamp'] for elem in data_crosses[d] for x in elem['motion']])
-        timestamp_data.columns = ['timestamp']
+        key = gesture.split('/')[-1]
+        data[key] = []
+        if debug:
+            print(key)
 
-        motion_df = pd.concat([acc_data, rot_data, timestamp_data], axis=1).sort_values('timestamp', ascending=True).drop('timestamp', axis=1)
-        orientation_df = None
-
-        data_cross_list.append((counter, gesture, motion_df, orientation_df))
-        counter += 1
-        
-    return data_cross_list
-
-def process_motion_rotation(example, counter):
-    gesture = example.get('gesture', "")
-
-    motion = np.array(example['motion'])
-    orientation = np.array(example['orientation'])
-
-    #process motion data
-    if len(motion)>0:
-        if motion.shape[1]==7: #incl. acc and rotational velocities
-            motion_df = pd.DataFrame(motion, columns=['acceleration_x', 'acceleration_y', 'acceleration_z',
-                                                        'rotation_alpha', 'rotation_beta', 'rotation_gamma',
-                                                        'timestamp'
-                                                        ])\
-                            .sort_values('timestamp', ascending=True)\
-                            .drop('timestamp', axis=1)
-        
-        elif motion.shape[1]==4: #incl. acc only
-            motion_df = pd.DataFrame(motion, columns=['acceleration_x', 'acceleration_y', 'acceleration_z',
-                                                        'timestamp'
-                                                        ])\
-                            .sort_values('timestamp', ascending=True)\
-                            .drop('timestamp', axis=1)
-
-        else: #shouldn't enter
-            motion_df = pd.DataFrame()
-    else: #no motion data recorded
-        motion_df = pd.DataFrame()
-
-
-    #process orientation data
-    if len(orientation) > 0:
-        orientation_df = pd.DataFrame(orientation, columns=['alpha', 'beta', 'gamma', 'timestamp'])\
-                                .sort_values('timestamp', ascending=True)\
-                                .drop('timestamp', axis=1)
-    else:
-        orientation_df = pd.DataFrame()
-
-    return (counter, gesture, motion_df, orientation_df)
-
-def process_dance_data(data_dance_raw):
-    '''Returns list of size N_samples and each element = tuple(index, label, acc+rot vel dataframe, rot angle dataframe)
-    '''
-
-    #Ugly
-    #convert appropriate data to dataframes
-    global counter
-    
-    data = []
-    #counter = 0 #counter from before
-    for k in data_dance_raw.keys(): #loop over each dance type
-        d = data_dance_raw[k]
-        for example in d: #loop over each sample
-            data.append(process_motion_rotation(example, counter))
-
-            counter += 1
+        for file in files_to_read:
+            with fs.open(file) as f:
+                content = json.loads(f.read())
+            data[key].append(content)
 
     return data
 
-def clean_data(data):
-    return [d for d in data if d[2].shape[1]==6 and d[2].shape[0]>50] # <---- clean data
 
-def featurize(ts, bins, TAG):
-    '''Take time-series and create features
-    '''
-    mean = np.mean(ts)
-    median = np.median(ts)
-    std = np.std(ts)
-    length = len(ts)
-    kurtosis = scipy.stats.kurtosis(ts)
-    
-    n,b = np.histogram(ts, bins=bins)
-    n = np.array(n)/float(np.sum(n)) #normalize i.e. fraction of entries in each bin
-    
-    if median == 0: 
-        features = {f'{TAG}_mean_over_median': 0, #dimensionless            
-                    f'{TAG}_std_over_median': 0, #dimensionless            
-                    f'{TAG}_length': length,
-                    f'{TAG}_kurtosis': kurtosis, #already dimensionless by definition
-                   }
-        
-    else: 
-        features = {f'{TAG}_mean_over_median': mean/median, #dimensionless            
-            f'{TAG}_std_over_median': std/median, #dimensionless            
-            f'{TAG}_length': length,
-            f'{TAG}_kurtosis': kurtosis, #already dimensionless by definition
-           }
-        
-    for i, val in enumerate(n):
-        features[f'{TAG}_binfrac_{i}'] = val
-        
-    
-    return features
+def process_cross_data(data, *, bins: dict = None, method: str = None):
+    """Process collection of raw examples.
 
-def find_bins(ts_list, method='freedman'):
-    ''' Find bin edges for histograms based on different methods
-    '''
-    
-    ts_all = np.concatenate(ts_list)
-    
-    plt.clf()
-    if method in ['freedman', 'scott', 'knuth', 'blocks']:
-        n,b = np.histogram(ts_all, bins=method)
-        plt.hist(ts_all, bins=b)
-    else:
-        n,b,p = plt.hist(ts_all)
+    :returns: bins, DataFrame
+    """
+    bins = bins or {}
+    gesture = 'draw-cross'
 
-    return ts_all, b
+    data_processed = []
+    for ts, d in data.items():  # loop over each sample
+        df = pd.DataFrame([], columns=motion_cols + ['timestamp'] + orientation_cols)
 
-def create_dataframe(data, add_label=True):
-    df_list = []
-    col_bins = {}
+        acc_data = pd.DataFrame([x['acceleration'] for elem in d for x in elem['motion']])
+        rot_data = pd.DataFrame([x['rotationRate'] for elem in d for x in elem['motion']])
 
-    cols = ['acceleration_x', 'acceleration_y', 'acceleration_z',
-       'rotation_alpha', 'rotation_beta', 'rotation_gamma']
-    method = 'plt'
+        df[motion_cols] = pd.concat([acc_data, rot_data], axis=1)
+        df['timestamp'] = pd.DataFrame(
+            [x['timestamp'] for elem in d for x in elem['motion']])
 
-    for col in cols:
-        ts_all, b = find_bins([d[2][col] for d in data], method=method)
-        col_bins[col] = b
+        df = df \
+            .sort_values('timestamp', ascending=True) \
+            .drop('timestamp', axis=1)
 
-    for col in cols:
-        index_list, feature_list, label_list = [], [], []
-        for d in data:
-            features = featurize(d[2][col], bins=col_bins[col], TAG=col.upper())
+        data_processed.append(df)
 
-            feature_list.append(features)
-            index_list.append(d[0])
-            label_list.append(d[1])
+    data_clean = list(clean_data(data_processed))
 
-        feature_col_df = pd.DataFrame(feature_list)
+    col_bins, feature_df = featurize(
+        data_clean, label=gesture, col_bins=bins.get(gesture, None), method=method)
 
-        df_list.append(feature_col_df)
-        
-    df = pd.concat(df_list, axis=1)
-    df['index'] = index_list
-    if add_label:
-        df['label'] = label_list
-    
+    return {gesture: col_bins}, feature_df
+
+
+def process_motion_rotation(example: dict):
+    """Process single raw example and returns dataframe.
+
+    :returns: DataFrame
+    """
+    motion = np.array(example['motion'])
+    orientation = np.array(example['orientation'])
+
+    # process motion data
+    df = pd.DataFrame([], columns=motion_cols + ['timestamp'] + orientation_cols)
+
+    if len(motion) > 0:
+        if motion.shape[1] == 7:  # incl. acc and rotational velocities
+            df[motion_cols + ['timestamp']] = pd.DataFrame(motion)
+
+    # process orientation data
+    if len(orientation) > 0:
+        df[orientation_cols] = pd.DataFrame(orientation[:, :-1])
+
+    df = df \
+        .sort_values('timestamp', ascending=True) \
+        .drop('timestamp', axis=1)
+
     return df
 
 
+def process_dance_data(data, *,
+                       bins: dict = None,
+                       method: str = None):
+    """Process raw data into single dataframe.
+
+    :returns: bins, DataFrame
+    """
+    df = pd.DataFrame()
+    bins = bins or {}
+
+    for gesture, d in data.items():  # loop over each dance type
+        data_clean = list(clean_data(
+            process_motion_rotation(example) for example in d))
+
+        col_bins, feature_df = featurize(
+            data_clean, label=gesture, col_bins=bins.get(gesture, None), method=method)
+
+        bins[gesture] = col_bins
+
+        df = pd.concat([df, feature_df], axis=0, ignore_index=True)
+
+    return bins, df
 
 
+def clean_data(data: list):
+    """Clean collection of dataframes."""
+
+    def condition(df): return all(df[motion_cols].any()) and len(df) > 50
+
+    return filter(condition, map(lambda df: df[motion_cols].dropna(), data))
+
+
+def featurize(data, *, label: str = None, col_bins: dict = None, method: str = None):
+    """Featurize."""
+    col_bins = col_bins or {}
+
+    df = pd.DataFrame()
+    for idx, col in enumerate(motion_cols):
+        bins = col_bins.get(col, None)
+
+        if bins is None:
+            _, bins = find_bins(
+                np.concatenate([d[col] for d in data]), method=method)
+            col_bins[col] = bins
+
+        tag = col.upper()
+
+        feature_list = []
+        for d in data:
+            ts = d[col]
+
+            mean = np.mean(ts)
+            median = np.median(ts)
+            std = np.std(ts)
+            length = len(ts)
+            kurtosis = scipy.stats.kurtosis(ts)
+
+            n, b = np.histogram(ts, bins=bins)
+            n = np.array(n) / float(np.sum(n))  # normalize i.e. fraction of entries in each bin
+
+            if median == 0:
+                features = {f'{tag}_mean_over_median': 0,  # dimensionless
+                            f'{tag}_std_over_median': 0,  # dimensionless
+                            f'{tag}_length': length,
+                            f'{tag}_kurtosis': kurtosis,  # already dimensionless by definition
+                            }
+
+            else:
+                features = {f'{tag}_mean_over_median': mean / median,  # dimensionless
+                            f'{tag}_std_over_median': std / median,  # dimensionless
+                            f'{tag}_length': length,
+                            f'{tag}_kurtosis': kurtosis,  # already dimensionless by definition
+                            }
+
+            for i, val in enumerate(n):
+                features[f'{tag}_binfrac_{i}'] = val
+
+            feature_list.append(features)
+
+        df = pd.concat([df, pd.DataFrame(feature_list)], axis=1)
+
+    if label:
+        df['label'] = label
+
+    return col_bins, df.to_sparse()
+
+
+def find_bins(x, method: str = None):
+    """Find bin edges for histograms based on different methods."""
+    if np.isscalar(x):
+        x = [x]
+
+    bins = method or mpl.rcParams['hist.bins']
+
+    # basic input validation
+    input_empty = np.size(x) == 0
+
+    if input_empty:
+        x = [np.array([])]
+    else:
+        x = mpl.cbook._reshape_2D(x, 'x')
+
+    nx = len(x)  # number of datasets
+    w = [None] * nx
+
+    xmin = np.inf
+    xmax = -np.inf
+    for xi in x:
+        if len(xi) > 0:
+            xmin = min(xmin, np.nanmin(xi))
+            xmax = max(xmax, np.nanmax(xi))
+    bin_range = (xmin, xmax)
+
+    # List to store all the top coordinates of the histograms
+    tops = []
+    mlast = None
+
+    hist_kwargs = dict(range=bin_range)
+
+    # Loop through datasets
+    for i in range(nx):
+        # this will automatically overwrite bins,
+        # so that each histogram uses the same bins
+        m, bins = np.histogram(x[i], bins, weights=w[i], **hist_kwargs)
+        m = m.astype(float)  # causes problems later if it's an int
+        tops.append(m)
+
+    return tops, bins
+
+
+def find_col_bins(data, method: str = None, export: str = None):
+    """Find bins for every column in the data. Optionally exports as JSON."""
+    data = list(data)
+
+    col_bins = {}
+
+    for idx, col in enumerate(motion_cols):
+        bins = col_bins.get(col, None)
+
+        if bins is None:
+            _, bins = find_bins(
+                np.concatenate([d[col] for d in data]), method=method)
+            col_bins[col] = bins
+
+    if export:
+        bins_export = Path(export)
+        bins_export.parent.mkdir(parents=True, exist_ok=True)
+
+        bins_export.write_text(json.dumps({
+            col: bins.tolist() for col, bins in col_bins.items()
+        }))
+
+    return col_bins
