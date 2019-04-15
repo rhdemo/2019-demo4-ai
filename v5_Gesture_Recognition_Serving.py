@@ -151,7 +151,7 @@ class Model(Resource):
     """Model api resource."""
 
     @model_ns.response(200, 'Success', model=payload)
-    @model_ns.response(400, 'Validation Error')
+    @model_ns.response(400, 'Validation Error or invalid model input')
     @model_ns.expect(prediction_input, validate=True)
     @model_ns.marshal_list_with(payload)
     def post(self):
@@ -159,22 +159,35 @@ class Model(Resource):
         global _SESSION
 
         model, encoder = _load_keras_model()
-        bins = json.loads(Path(_MODEL_DIR / 'bins.json').read_text())
+
+        bins = json.loads(
+                Path(_MODEL_DIR / 'bins.json').read_text())
+        bins_partial = json.loads(
+                Path(_MODEL_DIR / 'bins_partial.json').read_text())
 
         instances = request.get_json(force=True)['instances']
 
-        df = pd.DataFrame()
+        data = []
         for sample in instances:
             gesture = sample['gesture']
             data_clean = list(
                 clean_data([process_motion_rotation(sample)]))
 
-            _, feature_df = featurize(
-                data_clean, col_bins=bins[gesture])
+            if data_clean:
 
-            df = pd.concat([df, feature_df], axis=0, ignore_index=True)
+                _, feature_df_total = featurize(
+                        data_clean, col_bins=bins[gesture])
 
-        input_t: np.ndarray = np.array(df, dtype=np.float64)
+                _, feature_df_partial = featurize(
+                        data_clean, col_bins=bins_partial[gesture])
+
+                data.append(
+                        list(zip(feature_df_partial.to_numpy(), feature_df_total.to_numpy())))
+
+        input_t: np.ndarray = np.array(data, dtype=np.float64).squeeze()
+
+        if not np.any(input_t):
+            return "Error: Invalid model input.", HTTPStatus.BAD_REQUEST 
 
         tf.keras.backend.set_session(_SESSION)
 
