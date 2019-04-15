@@ -22,9 +22,8 @@ items:
     strategy:
       sourceStrategy:
         from:
-          kind: ImageStreamTag
-          name: "python:3.6"
-          namespace: openshift
+          kind: DockerImage
+          name: 'quay.io/vpavlin/python-36-ubi7:ubi'
       type: Source
     triggers:
     - type: ConfigChange
