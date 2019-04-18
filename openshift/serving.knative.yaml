@@ -31,6 +31,9 @@ objects:
                 limits:
                   memory: ${MEMORY}
                   cpu: ${CPU}
+                requests:
+                  memory: 1Gi
+                  cpu: 300m
               env:
               - name: REVISION
                 value: ${REVISION}
