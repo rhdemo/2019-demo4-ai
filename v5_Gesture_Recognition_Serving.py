@@ -4,6 +4,8 @@
 import glob
 import json
 import os
+import sys
+import signal
 
 import numpy as np
 import pandas as pd
@@ -257,7 +259,13 @@ def _load_keras_model():
     return _MODEL, _ENCODER
 
 
+def signal_term_handler(signal, frame):
+    app.logger.warn('got SIGTERM')
+    sys.exit(0)
+
+
 if __name__ == '__main__':
+    signal.signal(signal.SIGTERM, signal_term_handler)
 
     api = Api(title="Gestures model serving")
     api.init_app(app)
