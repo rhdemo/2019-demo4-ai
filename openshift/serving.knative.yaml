@@ -34,6 +34,8 @@ objects:
               env:
               - name: REVISION
                 value: ${REVISION}
+              - name: LOG_LEVEL
+                value: ${LOG_LEVEL}
 parameters:
 - name: APP_NAME
   description: Short name of your application (to be used in OpenShift artifact names)
@@ -49,7 +51,7 @@ parameters:
   required: true
 - description: Number of requests served by a single instance/pod
   name: SCALE_FACTOR
-  value: "1"
+  value: "20"
 - description: Namespace name the service is supposed to run in (probably current namespace)
   name: NAMESPACE
   value: tf-demo
@@ -59,3 +61,6 @@ parameters:
 - description: Version of the model
   name: REVISION
   value: "1"
+- description: Log level
+  name: LOG_LEVEL
+  value: "WARNING"

@@ -6,6 +6,7 @@ import json
 import os
 import sys
 import signal
+import logging
 
 import numpy as np
 import pandas as pd
@@ -257,6 +258,15 @@ def _load_keras_model():
         _SESSION = tf.keras.backend.get_session()
 
     return _MODEL, _ENCODER
+
+@app.before_first_request
+def setup_logging():
+    levels = {"INFO": logging.INFO, "DEBUG": logging.DEBUG, "WARNING": logging.WARNING}
+    level = levels[os.environ.get('LOG_LEVEL', "WARNING")]
+
+    # In production mode, add log handler to sys.stdout.
+    #app.logger.addHandler(logging.StreamHandler(stream=sys.stdout))
+    app.logger.setLevel(level)
 
 
 def signal_term_handler(signal, frame):
