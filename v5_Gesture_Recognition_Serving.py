@@ -5,6 +5,8 @@ import glob
 import json
 import os
 
+import logging
+
 import numpy as np
 import pandas as pd
 
@@ -43,6 +45,7 @@ _ENCODER: LabelEncoder = None
 
 
 app = Flask(__name__)
+app.logger.setLevel(os.getenv("LOGGING_LEVEL", "INFO"))
 
 probe_ns = Namespace('probe', description="Health checks.")
 model_ns = Namespace('model', description="Model namespace.")
@@ -181,10 +184,9 @@ class Model(Resource):
                 _, feature_df_partial = featurize(
                         data_clean, col_bins=bins_partial[gesture])
 
-                data.append(
-                        list(zip(feature_df_partial.to_numpy(), feature_df_total.to_numpy())))
+                data.append(np.vstack([feature_df_partial, feature_df_total]))
 
-        input_t: np.ndarray = np.array(data, dtype=np.float64).squeeze()
+        input_t: np.ndarray = np.array(data, dtype=np.float64)
 
         if not np.any(input_t):
             return "Error: Invalid model input.", HTTPStatus.BAD_REQUEST 
