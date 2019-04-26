@@ -159,9 +159,8 @@ class Model(Resource):
     @model_ns.marshal_list_with(payload)
     def post(self):
         """Return predictions from the trained model."""
-        global _SESSION
-
-        model, encoder = _load_keras_model()
+        global _MODEL
+        global _ENCODER
 
         bins = json.loads(
                 Path(_MODEL_DIR / 'bins.json').read_text())
@@ -191,16 +190,14 @@ class Model(Resource):
         if not np.any(input_t):
             return "Error: Invalid model input.", HTTPStatus.BAD_REQUEST 
 
-        tf.keras.backend.set_session(_SESSION)
-
-        scores: np.ndarray = model.predict(
+        scores: np.ndarray = _MODEL.predict(
             input_t, max_queue_size=20, use_multiprocessing=True, workers=4)
         probas: np.ndarray = np.exp(scores)
         probas /= np.sum(probas, axis=1)[:, np.newaxis]
 
         labels: np.ndarray = np.argmax(scores, axis=1)
 
-        candidates: list = encoder.inverse_transform(labels).tolist()
+        candidates: list = _ENCODER.inverse_transform(labels).tolist()
 
         response = {
             'payload': [
@@ -208,7 +205,7 @@ class Model(Resource):
                     'candidate': candidates[i],
                     'candidate_score': float(sample[labels[i]]),
                     'predictions': dict(
-                        zip(encoder.classes_, sample.tolist())),
+                        zip(_ENCODER.classes_, sample.tolist())),
                 } for i, sample in enumerate(probas)
             ],
             'total': len(candidates)
@@ -294,5 +291,7 @@ if __name__ == '__main__':
 
     api.add_namespace(probe_ns)
     api.add_namespace(model_ns)
+
+    _load_keras_model()
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
