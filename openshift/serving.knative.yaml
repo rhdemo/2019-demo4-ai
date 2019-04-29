@@ -33,7 +33,7 @@ objects:
                   cpu: ${CPU}
                 requests:
                   memory: 1Gi
-                  cpu: 300m
+                  cpu: 200m
               env:
               - name: REVISION
                 value: ${REVISION}
@@ -54,7 +54,7 @@ parameters:
   required: true
 - description: Number of requests served by a single instance/pod
   name: SCALE_FACTOR
-  value: "20"
+  value: "3"
 - description: Namespace name the service is supposed to run in (probably current namespace)
   name: NAMESPACE
   value: tf-demo
@@ -66,4 +66,4 @@ parameters:
   value: "1"
 - description: Log level
   name: LOG_LEVEL
-  value: "WARNING"
+  value: "INFO"
