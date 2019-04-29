@@ -8,8 +8,6 @@ import sys
 import signal
 import logging
 
-import logging
-
 import numpy as np
 import pandas as pd
 
@@ -48,7 +46,6 @@ _ENCODER: LabelEncoder = None
 
 
 app = Flask(__name__)
-app.logger.setLevel(os.getenv("LOGGING_LEVEL", "INFO"))
 
 probe_ns = Namespace('probe', description="Health checks.")
 model_ns = Namespace('model', description="Model namespace.")
