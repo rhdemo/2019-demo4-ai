@@ -4,6 +4,9 @@
 import glob
 import json
 import os
+import sys
+import signal
+import logging
 
 import numpy as np
 import pandas as pd
@@ -269,8 +272,23 @@ def _load_keras_model():
 
     return _MODEL, _ENCODER
 
+@app.before_first_request
+def setup_logging():
+    levels = {"INFO": logging.INFO, "DEBUG": logging.DEBUG, "WARNING": logging.WARNING}
+    level = levels[os.environ.get('LOG_LEVEL', "WARNING")]
+
+    # In production mode, add log handler to sys.stdout.
+    #app.logger.addHandler(logging.StreamHandler(stream=sys.stdout))
+    app.logger.setLevel(level)
+
+
+def signal_term_handler(signal, frame):
+    app.logger.warn('got SIGTERM')
+    sys.exit(0)
+
 
 if __name__ == '__main__':
+    signal.signal(signal.SIGTERM, signal_term_handler)
 
     api = Api(title="Gestures model serving")
     api.init_app(app)
