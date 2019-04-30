@@ -16,8 +16,8 @@ items:
         name: tf-serving:latest
     source:
       git:
-        uri: https://github.com/vpavlin/2019-demo4-ai
-        ref: feature/add-serving-infra
+        uri: https://github.com/rhdemo/2019-demo4-ai
+        ref: master
       type: Git
     strategy:
       sourceStrategy:
