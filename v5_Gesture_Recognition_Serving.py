@@ -124,6 +124,12 @@ payload = model_ns.model('uPayload', {
 
 model_ns.add_model('model_input', model_input)
 
+api = Api(title="Gestures model serving")
+api.init_app(app)
+
+api.add_namespace(probe_ns)
+api.add_namespace(model_ns)
+
 
 @probe_ns.route('/liveness')
 class Liveness(Resource):
@@ -285,14 +291,7 @@ def signal_term_handler(signal, frame):
     app.logger.warn('got SIGTERM')
     sys.exit(0)
 
-
+_load_keras_model()
 if __name__ == '__main__':
     signal.signal(signal.SIGTERM, signal_term_handler)
-
-    api = Api(title="Gestures model serving")
-    api.init_app(app)
-
-    api.add_namespace(probe_ns)
-    api.add_namespace(model_ns)
-
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False, threaded=False)
