@@ -24,6 +24,8 @@ objects:
               # Target 10 in-flight-requests per pod.
               autoscaling.knative.dev/target: "${SCALE_FACTOR}"
               autoscaling.knative.dev/minScale: "1"
+              autoscaling.knative.dev/maxScale: "${MAX_SCALE}"
+              sidecar.istio.io/inject: "false"
           spec:
             container:
               image: image-registry.openshift-image-registry.svc:5000/${NAMESPACE}/${IMAGE}:latest
@@ -67,3 +69,6 @@ parameters:
 - description: Log level
   name: LOG_LEVEL
   value: "INFO"
+- description: Maximum number of pods to scale to
+  name: MAX_SCALE
+  value: "90"
