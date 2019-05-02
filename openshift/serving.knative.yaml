@@ -23,7 +23,7 @@ objects:
             annotations:
               # Target 10 in-flight-requests per pod.
               autoscaling.knative.dev/target: "${SCALE_FACTOR}"
-              autoscaling.knative.dev/minScale: "1"
+              autoscaling.knative.dev/minScale: "${MAX_SCALE}"
               autoscaling.knative.dev/maxScale: "${MAX_SCALE}"
               sidecar.istio.io/inject: "false"
           spec:
