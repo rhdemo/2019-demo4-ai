@@ -34,7 +34,7 @@ objects:
                   memory: ${MEMORY}
                   cpu: ${CPU}
                 requests:
-                  memory: 2Gi
+                  memory: 2500Mi
                   cpu: 750m
               env:
               - name: REVISION
