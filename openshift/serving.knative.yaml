@@ -34,13 +34,15 @@ objects:
                   memory: ${MEMORY}
                   cpu: ${CPU}
                 requests:
-                  memory: 1Gi
-                  cpu: 200m
+                  memory: 2500Mi
+                  cpu: 750m
               env:
               - name: REVISION
                 value: ${REVISION}
               - name: LOG_LEVEL
                 value: ${LOG_LEVEL}
+              - name: WEB_CONCURRENCY
+                value: "${WEB_CONCURRENCY}"
 parameters:
 - name: APP_NAME
   description: Short name of your application (to be used in OpenShift artifact names)
@@ -48,11 +50,11 @@ parameters:
   required: true
 - name: MEMORY
   description: Memory limit to be assigned to the job
-  value: 1Gi
+  value: 4Gi
   required: true
 - name: CPU
   description: Limit for number of cores to assign to the job
-  value: "1"
+  value: "2"
   required: true
 - description: Number of requests served by a single instance/pod
   name: SCALE_FACTOR
@@ -71,4 +73,7 @@ parameters:
   value: "INFO"
 - description: Maximum number of pods to scale to
   name: MAX_SCALE
-  value: "90"
+  value: "75"
+- description: Number of gunicorn worker processes
+  name: WEB_CONCURRENCY
+  value: "16"
